@@ -2,31 +2,38 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
-  ci:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
+      
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-
-      - run: npm ci
-
-      - name: Lint
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Check lock file sync
+        run: |
+          npm ci --dry-run 2>&1 | tee /tmp/ci-check.log
+          if grep -q "npm error.*lock file" /tmp/ci-check.log; then
+            echo "❌ package-lock.json is out of sync with package.json"
+            echo "Run: npm install && git add package-lock.json && git commit -m 'chore: update lock file'"
+            exit 1
+          fi
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npm test -- --runInBand --coverage
+      
+      - name: ESLint
         run: npm run lint
-
-      - name: Format check
-        run: npm run format:check
-
-      - name: Typecheck
+      
+      - name: TypeScript check
         run: npx tsc --noEmit
-
-      - name: Test
-        run: npm test -- --passWithNoTests
